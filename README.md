@@ -1,14 +1,20 @@
-# Web3 Wallet Engineer Lab
+# Wallet Reliability Lab
 
-A small, runnable Go wallet-backend lab for explaining and testing custody-wallet domain boundaries without real keys or funds.
-
-It models users, deposit addresses, deposits, withdrawals, review, risk rules, nonce allocation, hot/cold wallets, collection planning, simulated chain transactions, audit logs, and Prometheus-style metrics. The implementation intentionally uses an in-memory store and simulated chain adapter so the state transitions remain easy to inspect.
+A public Web3 wallet-backend lab for testing state machines, fund invariants,
+and failure recovery without real keys or funds. The repository keeps the
+original Go domain API and adds a deterministic Vue experiment console backed
+by the same versioned scenario catalog used by Go validation.
 
 ## Quick start
 
 ```bash
 go test ./...
 go run ./cmd/api
+
+cd web
+npm ci
+npm test
+npm run dev
 ```
 
 The API listens on `:8080`:
@@ -20,6 +26,22 @@ curl http://localhost:8080/metrics
 
 Example requests are in [examples/requests.http](examples/requests.http).
 
+## Reliability experiments
+
+The normal withdrawal flow is scenario `00`. Six failure experiments cover:
+
+1. duplicate withdrawal idempotency and conflicting payloads;
+2. broadcast timeout with an unknown chain result;
+3. canonical chain success followed by a local DB or outbox failure;
+4. deposit reorg and reversal entries;
+5. nonce gaps and replacement transactions;
+6. fail-closed behavior when risk or signer dependencies are unavailable.
+
+Each experiment includes the injected fault, fund invariant, first stop-loss
+action, recovery basis, current boundary, deterministic timeline, and a named
+Go test. Scenario copy lives in `scenarios/catalog.json`; both the web console
+and Go tests validate that catalog.
+
 ## What is verified
 
 - Deposit address ownership is checked before crediting.
@@ -27,6 +49,7 @@ Example requests are in [examples/requests.http](examples/requests.http).
 - Reusing the same transaction key with different amount or metadata is rejected as an idempotency conflict.
 - Withdrawal risk rejection, review, nonce allocation, simulated broadcast, and confirmation are covered by tests.
 - Audit logs, health checks, and text metrics are exposed by the HTTP service.
+- The six failure experiments have executable Go invariants and web catalog tests.
 
 ```text
 Client / Admin API
@@ -45,7 +68,20 @@ This is an engineering learning lab, not a production wallet:
 - no production ledger, reorg compensation, or custody operations;
 - chain confirmations and broadcasts are simulated.
 
-The failure playbook and roadmap distinguish runnable evidence from production design. See [docs/testing-and-roadmap.md](docs/testing-and-roadmap.md) and [docs/interview-assets.md](docs/interview-assets.md).
+The failure playbook and roadmap distinguish runnable evidence from production
+design. See [docs/testing-and-roadmap.md](docs/testing-and-roadmap.md).
+
+## Verification
+
+```bash
+go test ./...
+npm --prefix web ci
+npm --prefix web test
+npm --prefix web run build
+```
+
+The static web console is deployed through GitHub Pages. The optional local Go
+API is not deployed by Pages and never receives a key or RPC credential.
 
 ## API outline
 
