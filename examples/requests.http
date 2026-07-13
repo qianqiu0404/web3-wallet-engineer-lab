@@ -1,0 +1,60 @@
+### Health
+GET http://localhost:8080/healthz
+
+### Create user
+POST http://localhost:8080/api/users
+Content-Type: application/json
+
+{"email":"candidate@example.com"}
+
+### Allocate ETH deposit address
+POST http://localhost:8080/api/users/user_000004/addresses
+Content-Type: application/json
+
+{"chain":"ETH"}
+
+### Simulate deposit
+POST http://localhost:8080/api/deposits/simulate
+Content-Type: application/json
+
+{
+  "user_id":"user_000004",
+  "chain":"ETH",
+  "asset":"USDT",
+  "address":"ETH-deposit-user_000004",
+  "amount":1000000,
+  "tx_hash":"0xdeposit001"
+}
+
+### Request withdrawal
+POST http://localhost:8080/api/withdrawals
+Content-Type: application/json
+
+{
+  "user_id":"user_000004",
+  "chain":"ETH",
+  "asset":"USDT",
+  "to_address":"0xreceiver",
+  "amount":1000000
+}
+
+### Approve withdrawal
+POST http://localhost:8080/api/admin/withdrawals/wd_000010/approve
+Content-Type: application/json
+
+{"operator":"risk-admin"}
+
+### Add blacklist
+POST http://localhost:8080/api/admin/blacklist
+Content-Type: application/json
+
+{"chain":"ETH","address":"0xbad","reason":"sanctions screening hit"}
+
+### Plan hot-to-cold collection
+POST http://localhost:8080/api/admin/collection-tasks
+Content-Type: application/json
+
+{"chain":"ETH","asset":"USDT","threshold":500000000}
+
+### Prometheus metrics
+GET http://localhost:8080/metrics
