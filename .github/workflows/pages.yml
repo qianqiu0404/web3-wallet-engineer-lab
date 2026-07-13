@@ -1,4 +1,4 @@
-name: Deploy experiment console
+name: Deploy catalog inspector
 
 on:
   push:

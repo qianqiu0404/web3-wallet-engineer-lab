@@ -26,11 +26,11 @@ function reset() {
     <section class="hero">
       <div class="shell hero-grid">
         <div>
-          <p class="eyebrow">Web3 Wallet Engineering · Public Evidence</p>
-          <h1>Wallet Reliability Lab</h1>
-          <p class="hero-copy">一个不接触真实私钥和资产的确定性实验台，用六个异常场景验证钱包状态机、资金不变量与恢复依据。</p>
+          <p class="eyebrow">Wallet Domain Engine · Technical Evidence</p>
+          <h1>Scenario Catalog Inspector</h1>
+          <p class="hero-copy">底层 Go 钱包领域引擎的技术检查页，用共享 Catalog 展示资金不变量、故障模型和对应断言；正式交互体验位于独立的 Wallet Reliability Lab。</p>
           <div class="hero-links">
-            <a href="#experiments" class="primary">运行异常实验</a>
+            <a href="https://wallet-reliability-lab.vercel.app" class="primary">打开正式实验台</a>
             <a href="https://github.com/qianqiu0404/web3-wallet-engineer-lab" target="_blank" rel="noopener">查看 Go 测试</a>
           </div>
         </div>
@@ -54,7 +54,7 @@ function reset() {
     <section id="experiments" class="lab shell">
       <header class="section-head">
         <p class="eyebrow">Failure Recovery Experiments</p>
-        <h2>从正常基线进入六个异常</h2>
+        <h2>检查一条基线与六个异常契约</h2>
         <p>每个实验明确区分故障注入、资金不变量、第一动作、恢复依据与当前边界。</p>
       </header>
 
@@ -92,6 +92,6 @@ function reset() {
       </article>
     </section>
 
-    <footer class="site-footer"><div class="shell"><strong>Wallet Reliability Lab</strong><p>这是工程学习与验证项目，不代表生产环境部署或真实资金事故。</p></div></footer>
+    <footer class="site-footer"><div class="shell"><strong>Web3 Wallet Domain Engine</strong><p>这是底层领域模型与契约检查页；交互式讲解由 Wallet Reliability Lab 提供。</p></div></footer>
   </main>
 </template>

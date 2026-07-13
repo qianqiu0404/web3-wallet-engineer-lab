@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/qianqiu0404/web3-wallet-engineer-lab/scenarios/catalog.schema.json",
+  "title": "Wallet Domain Engine Scenario Catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "updatedAt", "scenarios"],
+  "properties": {
+    "version": { "const": 1 },
+    "updatedAt": { "type": "string", "format": "date" },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/scenario" }
+    }
+  },
+  "$defs": {
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "index", "title", "kind", "failureSlug", "summary", "injectedFault", "fundInvariant", "firstAction", "recoveryBasis", "currentBoundary", "goTest", "steps"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "index": { "type": "string", "pattern": "^[0-9]{2}$" },
+        "title": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["baseline", "failure"] },
+        "failureSlug": { "type": "string" },
+        "summary": { "type": "string", "minLength": 1 },
+        "injectedFault": { "type": "string", "minLength": 1 },
+        "fundInvariant": { "type": "string", "minLength": 1 },
+        "firstAction": { "type": "string", "minLength": 1 },
+        "recoveryBasis": { "type": "string", "minLength": 1 },
+        "currentBoundary": { "type": "string", "minLength": 1 },
+        "goTest": { "type": "string", "pattern": "^Test" },
+        "steps": {
+          "type": "array",
+          "minItems": 4,
+          "items": { "$ref": "#/$defs/step" }
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service", "state", "title", "detail", "tone"],
+      "properties": {
+        "service": { "type": "string", "minLength": 1 },
+        "state": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string", "minLength": 1 },
+        "tone": { "enum": ["neutral", "active", "success", "warning", "danger", "recovered"] }
+      }
+    }
+  }
+}

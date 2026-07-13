@@ -1,9 +1,28 @@
-# Wallet Reliability Lab
+# Web3 Wallet Domain Engine
 
-A public Web3 wallet-backend lab for testing state machines, fund invariants,
-and failure recovery without real keys or funds. The repository keeps the
-original Go domain API and adds a deterministic Vue experiment console backed
-by the same versioned scenario catalog used by Go validation.
+> The executable domain and evidence layer behind the public wallet reliability portfolio.
+
+[Interactive Reliability Lab](https://wallet-reliability-lab.vercel.app) · [Engineering Portfolio](https://xiuqiu-site.vercel.app) · [Catalog Inspector](https://qianqiu0404.github.io/web3-wallet-engineer-lab/)
+
+This repository models wallet-backend state machines, idempotency, fund invariants, risk decisions, nonce allocation, and deterministic failure recovery without real keys or funds. It owns executable Go evidence and the versioned Scenario Catalog; the polished interaction experience lives in the separate Wallet Reliability Lab repository.
+
+## Repository role
+
+```text
+xiuqiu-site                     portfolio and evidence index
+        │
+        ├── wallet-reliability-lab      interactive explanation layer
+        │             │
+        │             └── pins Scenario Catalog v1
+        │
+        └── web3-wallet-engineer-lab    this repository
+                      ├── Go domain API
+                      ├── fund invariants
+                      ├── deterministic fault models
+                      └── versioned scenario contract
+```
+
+The GitHub Pages site is a technical Catalog Inspector, not the primary product demo.
 
 ## Quick start
 
@@ -17,71 +36,31 @@ npm test
 npm run dev
 ```
 
-The API listens on `:8080`:
+The API listens on `:8080`. Example requests are in [examples/requests.http](examples/requests.http).
 
-```bash
-curl http://localhost:8080/healthz
-curl http://localhost:8080/metrics
-```
+## Scenario Catalog v1
 
-Example requests are in [examples/requests.http](examples/requests.http).
+`scenarios/catalog.json` is the canonical machine-readable recovery catalog. `scenarios/catalog.schema.json` defines the public v1 contract. The Go model and technical web inspector both consume the same catalog.
 
-## Reliability experiments
+The catalog contains one normal withdrawal baseline and six failure models:
 
-The normal withdrawal flow is scenario `00`. Six failure experiments cover:
-
-1. duplicate withdrawal idempotency and conflicting payloads;
+1. duplicate withdrawal idempotency and payload conflicts;
 2. broadcast timeout with an unknown chain result;
-3. canonical chain success followed by a local DB or outbox failure;
+3. canonical chain success followed by local persistence failure;
 4. deposit reorg and reversal entries;
 5. nonce gaps and replacement transactions;
 6. fail-closed behavior when risk or signer dependencies are unavailable.
 
-Each experiment includes the injected fault, fund invariant, first stop-loss
-action, recovery basis, current boundary, deterministic timeline, and a named
-Go test. Scenario copy lives in `scenarios/catalog.json`; both the web console
-and Go tests validate that catalog.
+Every scenario defines its injected fault, fund invariant, first stop-loss action, recovery basis, current boundary, deterministic timeline, and named Go test.
 
 ## What is verified
 
-- Deposit address ownership is checked before crediting.
-- Replaying the same `(chain, tx_hash)` and payload returns the original deposit.
-- Reusing the same transaction key with different amount or metadata is rejected as an idempotency conflict.
-- Withdrawal risk rejection, review, nonce allocation, simulated broadcast, and confirmation are covered by tests.
-- Audit logs, health checks, and text metrics are exposed by the HTTP service.
-- The six failure experiments have executable Go invariants and web catalog tests.
-
-```text
-Client / Admin API
-  -> HTTP handler
-  -> Wallet service + risk rules
-  -> In-memory store
-  -> Simulated chain transaction
-```
-
-## Important limits
-
-This is an engineering learning lab, not a production wallet:
-
-- no real blockchain RPC, private key, signer, or asset;
-- no PostgreSQL transaction, distributed lock, message queue, or multi-instance coordination;
-- no production ledger, reorg compensation, or custody operations;
-- chain confirmations and broadcasts are simulated.
-
-The failure playbook and roadmap distinguish runnable evidence from production
-design. See [docs/testing-and-roadmap.md](docs/testing-and-roadmap.md).
-
-## Verification
-
-```bash
-go test ./...
-npm --prefix web ci
-npm --prefix web test
-npm --prefix web run build
-```
-
-The static web console is deployed through GitHub Pages. The optional local Go
-API is not deployed by Pages and never receives a key or RPC credential.
+- deposit address ownership before crediting;
+- idempotent deposit replay and conflict rejection;
+- withdrawal review, risk rejection, nonce allocation, simulated broadcast, and confirmation;
+- one canonical fund result across duplicate, unknown, compensation, reorg, replacement, and dependency-outage paths;
+- audit logs, health checks, and Prometheus-style text metrics;
+- Catalog v1 semantic and schema-contract checks.
 
 ## API outline
 
@@ -96,6 +75,24 @@ API is not deployed by Pages and never receives a key or RPC credential.
 | POST | `/api/admin/withdrawals/{id}/approve` | Approve and simulate broadcast |
 | POST | `/api/chain/tx/{id}/confirm` | Simulate canonical confirmation |
 
+## Verification
+
+```bash
+go vet ./...
+go test -race ./...
+npm --prefix web ci
+npm --prefix web test
+npm --prefix web run build
+```
+
+## Boundaries
+
+- no real blockchain RPC, private key, signer, or asset;
+- no PostgreSQL transaction, distributed lock, queue, or multi-instance coordination;
+- no production ledger, custody operation, or claim of production readiness;
+- the technical Pages inspector does not deploy the Go API;
+- private wallet-service repositories are not dependencies of this public engine.
+
 ## License
 
-MIT
+MIT © xiuqiu
