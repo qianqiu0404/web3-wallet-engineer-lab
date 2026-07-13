@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "updatedAt": "2026-07-13",
+  "scenarios": [
+    {
+      "id": "normal-withdrawal",
+      "index": "00",
+      "title": "正常提现基线",
+      "kind": "baseline",
+      "failureSlug": "",
+      "summary": "从请求落库、风控、构建、签名、广播到链上确认，每一步都由可恢复状态承接。",
+      "injectedFault": "无故障注入",
+      "fundInvariant": "一笔业务请求只对应一次冻结、一次 canonical 出金和一次终态通知。",
+      "firstAction": "先持久化 request_id 和业务意图，再推进异步状态。",
+      "recoveryBasis": "request_id、交易指纹与 canonical 链上结果。",
+      "currentBoundary": "确定性模拟，不接触真实节点、私钥或资产。",
+      "goTest": "TestBaselineHasOneCanonicalOutcome",
+      "steps": [
+        {"service":"wallet-service","state":"review_pending","title":"请求落库","detail":"保存 request_id、金额与目标地址。","tone":"active"},
+        {"service":"risk-service","state":"approved","title":"风控放行","detail":"审批内容与待签名内容保持一致。","tone":"success"},
+        {"service":"wallet-sign","state":"signed","title":"策略校验后签名","detail":"密钥材料不离开签名边界。","tone":"success"},
+        {"service":"wallet-api","state":"broadcasted","title":"广播原始交易","detail":"广播前已保存完整 signed raw transaction。","tone":"active"},
+        {"service":"chain","state":"wallet_done","title":"链上确认完成","detail":"最终状态以 canonical 链上事实推进。","tone":"recovered"}
+      ]
+    },
+    {
+      "id": "duplicate-withdrawal",
+      "index": "01",
+      "title": "重复提现",
+      "kind": "failure",
+      "failureSlug": "duplicate-request-id-conflict",
+      "summary": "验证相同 request_id 不会重复创建订单或冻结资金，参数冲突会被明确拒绝。",
+      "injectedFault": "客户端重试同一请求，并再次使用相同 ID 提交不同金额。",
+      "fundInvariant": "始终只有一个提现订单和一次资金冻结。",
+      "firstAction": "按 request_id 查询原记录并比较 canonical 请求指纹。",
+      "recoveryBasis": "request_id 唯一约束与请求内容哈希。",
+      "currentBoundary": "内存账本演示幂等语义，生产环境仍需数据库唯一约束与事务。",
+      "goTest": "TestDuplicateWithdrawalIsIdempotentAndConflictsAreRejected",
+      "steps": [
+        {"service":"business","state":"received","title":"首次提交提现","detail":"request_id=wd_001，冻结一次余额。","tone":"active"},
+        {"service":"wallet-service","state":"review_pending","title":"订单与冻结落库","detail":"保存 canonical 请求指纹。","tone":"success"},
+        {"service":"business","state":"duplicate","title":"相同参数重试","detail":"返回原订单，不创建新资金动作。","tone":"recovered"},
+        {"service":"wallet-service","state":"conflict","title":"不同参数复用 ID","detail":"拒绝冲突请求并保留原订单。","tone":"danger"}
+      ]
+    },
+    {
+      "id": "broadcast-unknown",
+      "index": "02",
+      "title": "广播结果未知",
+      "kind": "failure",
+      "failureSlug": "broadcast-timeout-unknown",
+      "summary": "RPC timeout 不能直接解释为广播失败；系统暂停新资金动作并先对账。",
+      "injectedFault": "节点在接收 raw transaction 后连接超时，调用方无法确认结果。",
+      "fundInvariant": "结果未知期间不重新构建、重新签名或创建第二笔出金。",
+      "firstAction": "进入 broadcast_unknown，保存 raw 指纹并暂停自动重发。",
+      "recoveryBasis": "txHash、sender/nonce、raw 指纹和多节点查询。",
+      "currentBoundary": "模拟多节点查询结论，不声称已连接真实链上 RPC。",
+      "goTest": "TestBroadcastUnknownPausesNewTransaction",
+      "steps": [
+        {"service":"wallet-service","state":"signed","title":"原始交易已持久化","detail":"nonce、txHash 与 raw 指纹稳定。","tone":"success"},
+        {"service":"wallet-api","state":"timeout","title":"广播调用超时","detail":"节点是否接收交易未知。","tone":"warning"},
+        {"service":"wallet-service","state":"broadcast_unknown","title":"暂停新交易","detail":"禁止重新构建第二笔交易。","tone":"danger"},
+        {"service":"wallet-api","state":"reconciling","title":"查询链上事实","detail":"使用 txHash 与 sender/nonce 交叉查询。","tone":"active"},
+        {"service":"chain","state":"wallet_done","title":"发现 canonical 交易","detail":"以已存在交易推进本地状态。","tone":"recovered"}
+      ]
+    },
+    {
+      "id": "chain-success-local-failure",
+      "index": "03",
+      "title": "链上成功，本地更新失败",
+      "kind": "failure",
+      "failureSlug": "chain-success-local-update-failure",
+      "summary": "链上已经完成时不回滚资金事实，而是让补偿任务幂等追平账务和通知。",
+      "injectedFault": "交易确认后，本地 DB 或 outbox 提交失败。",
+      "fundInvariant": "canonical 出金只记账一次，通知可以重试但不能重复结算。",
+      "firstAction": "停止重复广播，保留链上定位信息并进入补偿队列。",
+      "recoveryBasis": "canonical receipt、业务订单和账务分录唯一键。",
+      "currentBoundary": "内存补偿模型；生产环境需要事务账本、outbox 和持续对账。",
+      "goTest": "TestCanonicalCompensationIsIdempotent",
+      "steps": [
+        {"service":"chain","state":"confirmed","title":"链上交易成功","detail":"receipt status=1 且确认数满足。","tone":"success"},
+        {"service":"wallet-service","state":"local_failed","title":"本地提交失败","detail":"订单仍落后于链上事实。","tone":"danger"},
+        {"service":"wallet-service","state":"compensating","title":"按 canonical 结果补偿","detail":"使用账务唯一键重复执行安全。","tone":"active"},
+        {"service":"notifier","state":"retrying","title":"通知独立重试","detail":"通知失败不回滚链上与账务终态。","tone":"warning"},
+        {"service":"wallet-service","state":"wallet_done","title":"本地状态追平","detail":"账务和通知分别只产生一次有效结果。","tone":"recovered"}
+      ]
+    },
+    {
+      "id": "deposit-reorg",
+      "index": "04",
+      "title": "充值区块发生 Reorg",
+      "kind": "failure",
+      "failureSlug": "credited-block-reorg",
+      "summary": "充值先进入待确认余额；区块被移除时通过状态回退或反向分录恢复。",
+      "injectedFault": "已观察到的充值区块被新的 canonical 分支替换。",
+      "fundInvariant": "未达到最终确认前，充值金额不能成为可提现余额。",
+      "firstAction": "暂停该充值的可用余额推进，重新定位 canonical 区块。",
+      "recoveryBasis": "blockHash、txHash、logIndex 与确认数。",
+      "currentBoundary": "模拟 EVM reorg；没有连接真实扫链器或生产账本。",
+      "goTest": "TestDepositReorgUsesReversalEntry",
+      "steps": [
+        {"service":"chain","state":"observed","title":"发现充值事件","detail":"记录 blockHash、txHash 与 logIndex。","tone":"active"},
+        {"service":"wallet-service","state":"pending_credit","title":"进入待确认余额","detail":"尚不可提现。","tone":"success"},
+        {"service":"chain","state":"orphaned","title":"原区块被移除","detail":"canonical 链不再包含该事件。","tone":"danger"},
+        {"service":"wallet-service","state":"reversing","title":"写入反向分录","detail":"保留历史，不直接删除原记录。","tone":"warning"},
+        {"service":"wallet-service","state":"reorg_resolved","title":"余额恢复一致","detail":"可用余额未被错误增加。","tone":"recovered"}
+      ]
+    },
+    {
+      "id": "nonce-gap-replacement",
+      "index": "05",
+      "title": "Nonce Gap 与 Replacement",
+      "kind": "failure",
+      "failureSlug": "evm-nonce-conflict-gap",
+      "summary": "同一业务订单可以跟踪替换交易，但只能由一个 canonical txHash 完成。",
+      "injectedFault": "nonce N 长期 pending，后续交易形成 gap，并出现同 nonce replacement。",
+      "fundInvariant": "一个提现订单最多产生一个 canonical 资金结果。",
+      "firstAction": "暂停该发送地址的新 nonce 分配并核对 pending 集合。",
+      "recoveryBasis": "发送地址、nonce、候选 txHash 集合和 canonical receipt。",
+      "currentBoundary": "确定性 EVM 模型；生产环境需多节点 mempool 与链上查询。",
+      "goTest": "TestNonceReplacementHasOneCanonicalOutcome",
+      "steps": [
+        {"service":"wallet-api","state":"nonce_leased","title":"分配 nonce N","detail":"账户级租约绑定业务订单。","tone":"success"},
+        {"service":"chain","state":"pending","title":"nonce N 长期 pending","detail":"N+1 无法正常推进。","tone":"warning"},
+        {"service":"wallet-service","state":"paused","title":"暂停地址出金","detail":"结果不确定时不继续堆积 nonce。","tone":"danger"},
+        {"service":"wallet-api","state":"replacement_tracked","title":"登记替换交易","detail":"多个 txHash 仍关联同一订单。","tone":"active"},
+        {"service":"chain","state":"wallet_done","title":"唯一 canonical 结果","detail":"其余候选哈希标记为被替换。","tone":"recovered"}
+      ]
+    },
+    {
+      "id": "risk-or-signer-unavailable",
+      "index": "06",
+      "title": "风控或签名服务不可用",
+      "kind": "failure",
+      "failureSlug": "risk-or-signer-unavailable",
+      "summary": "关键授权或签名边界不可用时 fail-closed，不做不安全降级。",
+      "injectedFault": "risk-service timeout，随后模拟 Local Signer 或 MPC/TSS 门限不足。",
+      "fundInvariant": "没有有效审批和签名结果时，不能产生可广播交易。",
+      "firstAction": "保持审核或待签名状态，停止向后推进。",
+      "recoveryBasis": "request_id、审批内容指纹、签名策略版本与后端健康状态。",
+      "currentBoundary": "Local Signer 为已验证基线；MPC/TSS 仍在接入，HSM 属于后续设计。",
+      "goTest": "TestRiskAndSignerOutageFailsClosed",
+      "steps": [
+        {"service":"risk-service","state":"unavailable","title":"风控调用超时","detail":"没有生成有效 risk approval。","tone":"danger"},
+        {"service":"wallet-service","state":"review_pending","title":"保持审核状态","detail":"不构建可签名交易。","tone":"warning"},
+        {"service":"wallet-sign","state":"threshold_unavailable","title":"签名后端不可用","detail":"禁止绕过策略或降级到裸私钥。","tone":"danger"},
+        {"service":"wallet-service","state":"retry_scheduled","title":"保留相同业务指纹","detail":"恢复后使用同一 request_id 重新校验。","tone":"active"},
+        {"service":"wallet-sign","state":"signed","title":"服务恢复后安全推进","detail":"审批和策略校验通过后才签名。","tone":"recovered"}
+      ]
+    }
+  ]
+}
